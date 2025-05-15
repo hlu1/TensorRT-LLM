@@ -21,7 +21,7 @@ from tensorrt_llm.models.modeling_utils import QuantConfig
 from tensorrt_llm.quantization import QuantAlgo
 
 from ..conftest import (llm_models_root, parametrize_with_ids, skip_pre_ada,
-                        skip_pre_blackwell, skip_pre_hopper)
+                        skip_pre_blackwell, skip_pre_hopper, skip_no_hopper)
 from .accuracy_core import (GSM8K, MMLU, CnnDailymail, GPQADiamond,
                             LlmapiAccuracyTestHarness)
 
@@ -389,7 +389,7 @@ class TestDeepSeekV3Lite(LlmapiAccuracyTestHarness):
             task = GSM8K(self.MODEL_NAME)
             task.evaluate(llm)
 
-    @pytest.mark.skip_device_not_contain(["H100", "H200"])
+    # @pytest.mark.skip_device_not_contain(["H100", "H200"])
     @parametrize_with_ids("fp8kv,attention_dp,cuda_graph,overlap_scheduler",
                           [(False, False, False, False),
                            (True, False, False, False),
@@ -398,14 +398,19 @@ class TestDeepSeekV3Lite(LlmapiAccuracyTestHarness):
                            (False, False, False, True),
                            (True, True, True, True)])
     @parametrize_with_ids("mtp_nextn", [0, 2])
-    def test_fp8_block_scales(self, mtp_nextn, fp8kv, attention_dp, cuda_graph,
+    @parametrize_with_ids("moe_backend", [
+        pytest.param("CUTLASS", marks=skip_no_hopper),
+        pytest.param("TRTLLM", marks=skip_pre_blackwell)
+    ])
+    def test_fp8_block_scales(self, moe_backend, mtp_nextn, fp8kv, attention_dp, cuda_graph,
                               overlap_scheduler):
         # OOM on H100 with default free_gpu_memory_fraction=0.9
         kv_cache_config = KvCacheConfig(free_gpu_memory_fraction=0.8,
                                         enable_block_reuse=not fp8kv)
         pytorch_config = PyTorchConfig(
             disable_overlap_scheduler=not overlap_scheduler,
-            use_cuda_graph=cuda_graph)
+            use_cuda_graph=cuda_graph,
+            moe_backend=moe_backend)
 
         quant_config = QuantConfig()
         quant_config.quant_algo = QuantAlgo.FP8_BLOCK_SCALES
@@ -510,19 +515,21 @@ class TestDeepSeekV3Lite(LlmapiAccuracyTestHarness):
             task.evaluate(llm)
 
     @skip_pre_blackwell
-    @parametrize_with_ids("fp8kv,attention_dp,cuda_graph,overlap_scheduler",
-                          [(False, False, False, False),
-                           (True, False, False, False),
-                           (False, True, False, False),
-                           (False, False, True, False),
-                           (False, False, False, True),
-                           (True, True, True, True)])
-    def test_nvfp4(self, fp8kv, attention_dp, cuda_graph, overlap_scheduler):
+    @parametrize_with_ids("fp8kv,attention_dp,cuda_graph,overlap_scheduler,moe_backend",
+                          [(False, False, False, False, "CUTLASS"),
+                           (True, False, False, False, "CUTLASS"),
+                           (False, True, False, False, "CUTLASS"),
+                           (False, False, True, False, "CUTLASS"),
+                           (False, False, False, True, "CUTLASS"),
+                           (True, True, True, True, "CUTLASS"),
+                           (True, True, True, True, "TRTLLM")])
+    def test_nvfp4(self, fp8kv, attention_dp, cuda_graph, overlap_scheduler, moe_backend):
         kv_cache_config = KvCacheConfig(free_gpu_memory_fraction=0.9,
                                         enable_block_reuse=not fp8kv)
         pytorch_config = PyTorchConfig(
             disable_overlap_scheduler=not overlap_scheduler,
-            use_cuda_graph=cuda_graph)
+            use_cuda_graph=cuda_graph,
+            moe_backend=moe_backend)
 
         quant_config = QuantConfig()
         quant_config.quant_algo = QuantAlgo.NVFP4
@@ -536,6 +543,7 @@ class TestDeepSeekV3Lite(LlmapiAccuracyTestHarness):
                   quant_config=quant_config,
                   enable_attention_dp=attention_dp)
 
+        assert llm.pytorch_backend_config.moe_backend == moe_backend
         assert llm.args.quant_config.quant_algo == QuantAlgo.NVFP4
         if fp8kv:
             assert llm.args.quant_config.kv_cache_quant_algo == QuantAlgo.FP8
@@ -689,7 +697,8 @@ class TestDeepSeekR1(LlmapiAccuracyTestHarness):
                                         enable_block_reuse=not fp8kv)
         pytorch_config = PyTorchConfig(
             disable_overlap_scheduler=not overlap_scheduler,
-            use_cuda_graph=cuda_graph)
+            use_cuda_graph=cuda_graph,
+            moe_backend=moe_backend)
 
         quant_config = QuantConfig()
         quant_config.quant_algo = QuantAlgo.NVFP4
@@ -709,8 +718,9 @@ class TestDeepSeekR1(LlmapiAccuracyTestHarness):
                   pytorch_backend_config=pytorch_config,
                   quant_config=quant_config,
                   enable_attention_dp=attention_dp,
-                  speculative_config=mtp_config,
-                  moe_backend=moe_backend)
+                  speculative_config=mtp_config)
+
+        assert llm.pytorch_backend_config.moe_backend == moe_backend
         assert llm.args.quant_config.quant_algo == QuantAlgo.NVFP4
         if fp8kv:
             assert llm.args.quant_config.kv_cache_quant_algo == QuantAlgo.FP8
