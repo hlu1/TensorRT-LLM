@@ -15,6 +15,7 @@ from tensorrt_llm.mapping import Mapping
 
 from ...models.modeling_utils import QuantConfig
 from ..utils import Fp4QuantizedTensor
+from .quantization import QuantizeMethodBase
 
 E2M1_MAX = 6.0
 
