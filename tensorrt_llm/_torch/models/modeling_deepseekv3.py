@@ -54,7 +54,7 @@ from ..modules.embedding import Embedding
 from ..modules.fused_moe import DeepSeekV3MoeRoutingMethod, FusedMoE
 from ..modules.gated_mlp import GatedMLP
 from ..modules.linear import Linear
-from ..modules.moe_load_balancer import MoeLoadBalancer
+from ..modules.moe.moe_load_balancer import MoeLoadBalancer
 from ..modules.multi_stream_utils import maybe_execute_in_parallel
 from ..modules.rms_norm import RMSNorm
 from ..speculative import MTPEagleWorker, MTPSpecMetadata, MTPWorker
