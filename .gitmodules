@@ -26,3 +26,6 @@
 [submodule "3rdparty/cppzmq"]
 	path = 3rdparty/cppzmq
 	url = https://github.com/zeromq/cppzmq.git
+[submodule "3rdparty/triton"]
+	path = 3rdparty/triton
+	url = https://github.com/dongfengy/triton.git
